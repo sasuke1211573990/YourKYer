@@ -50,15 +50,3 @@ class ChatHistory(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     user = relationship("User", back_populates="chat_history")
-
-class CrawledData(Base):
-    __tablename__ = "crawled_data"
-
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(Text)
-    link = Column(Text, unique=True)
-    publish_date = Column(DateTime)
-    content = Column(Text)
-    source = Column(Text)
-    category = Column(Text)
-    university = Column(Text)

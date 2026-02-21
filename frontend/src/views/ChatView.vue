@@ -1,14 +1,9 @@
 <script setup>
 import { ref } from 'vue'
-import axios from 'axios'
 import { marked } from 'marked'
 
 const question = ref('')
 const messages = ref([])
-
-const renderMarkdown = (content) => {
-  return marked(content)
-}
 
 const sendQuestion = async () => {
   if (!question.value) return
@@ -17,56 +12,61 @@ const sendQuestion = async () => {
   const currentQuestion = question.value
   question.value = ''
   
-  // Create a placeholder for AI response
+  // Add an empty AI message to start streaming into
   const aiMessageIndex = messages.value.push({ type: 'ai', content: '' }) - 1
   
   try {
     const token = localStorage.getItem('token')
-    const response = await fetch('http://localhost:8000/chat', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({ question: currentQuestion })
+    // Use relative path /api/chat via Nginx proxy
+    const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ question: currentQuestion })
     })
 
-    if (!response.ok) throw new Error('Network response was not ok')
+    if (!response.ok) {
+        throw new Error('Network response was not ok')
+    }
 
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
 
     while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() // Keep incomplete line in buffer
+        const { done, value } = await reader.read()
+        if (done) break
+        
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() // Keep the last incomplete line in the buffer
 
-      for (const line of lines) {
-        if (!line.trim()) continue
-        try {
-          const data = JSON.parse(line)
-          if (data.type === 'answer') {
-            messages.value[aiMessageIndex].content += data.content
-          } else if (data.type === 'sources') {
-            // Optionally handle sources display
-            // For now we might append it or store it separately
-            // messages.value[aiMessageIndex].content += '\n\n**参考资料**:\n' + data.content.join('\n')
-          } else if (data.type === 'error') {
-            messages.value[aiMessageIndex].content += '\n\n' + data.content
-          }
-        } catch (e) {
-          console.error('Error parsing JSON chunk', e)
+        for (const line of lines) {
+            if (!line.trim()) continue
+            try {
+                const data = JSON.parse(line)
+                if (data.type === 'answer') {
+                    // Append content to the current AI message
+                    messages.value[aiMessageIndex].content += data.content
+                } else if (data.type === 'error') {
+                     messages.value[aiMessageIndex].content += `\n[Error: ${data.content}]`
+                }
+            } catch (e) {
+                console.error('Error parsing JSON chunk', e)
+            }
         }
-      }
     }
   } catch (error) {
-    messages.value[aiMessageIndex].content += '\n\n[系统提示] 发送失败或网络中断'
-    console.error(error)
+    messages.value[aiMessageIndex].content += '\n[发送失败，请确保已登录或检查网络]'
+    console.error('Fetch error:', error)
   }
+}
+
+// Function to render Markdown content
+const renderMarkdown = (content) => {
+    return marked(content)
 }
 </script>
 
@@ -74,6 +74,7 @@ const sendQuestion = async () => {
   <div class="chat-container">
     <div class="messages">
       <div v-for="(msg, index) in messages" :key="index" :class="['message', msg.type]">
+        <!-- Use v-html for AI messages to render Markdown -->
         <div v-if="msg.type === 'ai'" class="content markdown-body" v-html="renderMarkdown(msg.content)"></div>
         <div v-else class="content">{{ msg.content }}</div>
       </div>
@@ -113,42 +114,31 @@ const sendQuestion = async () => {
   margin-bottom: 10px;
   padding: 10px;
   border-radius: 4px;
-  max-width: 80%;
 }
 .message.user {
   background-color: #ecf5ff;
-  align-self: flex-end;
-  margin-left: auto;
+  text-align: right;
 }
 .message.ai {
   background-color: #f0f9eb;
-  align-self: flex-start;
-  margin-right: auto;
+  text-align: left;
 }
 .message.error {
   background-color: #fef0f0;
   text-align: center;
-  align-self: center;
 }
-/* Basic Markdown Styles */
+/* Basic Markdown styles */
 :deep(.markdown-body) {
-  line-height: 1.6;
-}
-:deep(.markdown-body h1), :deep(.markdown-body h2), :deep(.markdown-body h3) {
-  margin-top: 1em;
-  margin-bottom: 0.5em;
-  font-weight: bold;
-}
-:deep(.markdown-body ul), :deep(.markdown-body ol) {
-  padding-left: 20px;
-  margin-bottom: 1em;
+    font-family: -apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+    word-wrap: break-word;
 }
 :deep(.markdown-body p) {
-  margin-bottom: 1em;
+    margin-bottom: 16px;
 }
-:deep(.markdown-body code) {
-  background-color: #f4f4f5;
-  padding: 2px 4px;
-  border-radius: 2px;
+:deep(.markdown-body h1), :deep(.markdown-body h2) {
+    border-bottom: 1px solid #eaecef;
+    padding-bottom: .3em;
 }
 </style>

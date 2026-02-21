@@ -91,9 +91,6 @@ def init_db(db: Session):
     db.commit()
 
 if __name__ == "__main__":
-    # Ensure tables exist
-    models.Base.metadata.create_all(bind=database.engine)
-    
     db = database.SessionLocal()
     init_db(db)
     print("Database initialized with 50 universities and sample majors.")

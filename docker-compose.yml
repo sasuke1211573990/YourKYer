@@ -1,51 +1,28 @@
 version: '3.8'
 
 services:
-  db:
-    image: postgres:15
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: edu_platform
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-
-  redis:
-    image: redis:7
-    ports:
-      - "6379:6379"
-
+  # 后端服务
   backend:
     build: ./backend
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-    volumes:
-      - ./backend:/app
+    restart: always
     ports:
       - "8000:8000"
-    depends_on:
-      - db
-      - redis
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/edu_platform
-      REDIS_HOST: redis
-
-  crawler:
-    build: ./crawler
-    command: scrapy crawl edu_spider
+      # 在这里配置你的 DeepSeek API Key
+      - DEEPSEEK_API_KEY=sk-d2f31daaa7304e50b99f51f17a77580c
+      - LLM_MODEL=deepseek-reasoner
     volumes:
-      - ./crawler:/app
-    depends_on:
-      - db
+      # 挂载数据库文件，防止重启丢失数据
+      - ./backend/sql_app.db:/app/sql_app.db
 
+  # 前端服务
   frontend:
     build: ./frontend
+    restart: always
     ports:
-      - "3000:5173"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
+      - "80:80"
+    depends_on:
+      - backend
 
-volumes:
-  postgres_data:
+# 启动命令：docker-compose up -d --build
+# 停止命令：docker-compose down
